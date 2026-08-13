@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Gestion des Statuts & Opérations</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Toastr CSS & JS / jQuery -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+  <!-- SDK Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+  </style>
+</head>
+<body class="text-slate-800">
+
+<div class="flex min-h-screen">
+  <!-- 🧭 SIDEBAR NAVIGATION -->
+  <aside class="w-64 bg-[#056846] text-white flex flex-col shadow-xl">
+    <div class="p-6 text-center border-b border-emerald-800/60">
+      <div class="text-xl font-bold tracking-wider flex items-center justify-center gap-2">
+        <i class="fa-solid fa-building-columns text-emerald-300"></i>
+        <span>ESPACE CLIENT</span>
+      </div>
+      <span class="text-[11px] text-emerald-200 font-medium uppercase tracking-widest block mt-1">Console Administration</span>
+    </div>
+
+    <nav class="flex-1 p-4 space-y-1.5 text-sm font-medium">
+      <a class="flex items-center gap-3 px-4 py-3 bg-emerald-800 text-white rounded-xl shadow-sm transition" href="manage.html">
+        <i class="fa-solid fa-list-check w-5"></i>
+        <span>Gérer les Statuts</span>
+      </a>
+      <a class="flex items-center gap-3 px-4 py-3 text-emerald-100 hover:bg-emerald-800/50 hover:text-white rounded-xl transition" href="admin.html">
+        <i class="fa-solid fa-users-gear w-5"></i>
+        <span>Éditeur de Clients</span>
+      </a>
+      <a class="flex items-center gap-3 px-4 py-3 text-emerald-100 hover:bg-emerald-800/50 hover:text-white rounded-xl transition" href="dashboard.html">
+        <i class="fa-solid fa-chart-line w-5"></i>
+        <span>Aperçu Dashboard</span>
+      </a>
+    </nav>
+
+    <div class="p-4 border-t border-emerald-800/60">
+      <button onclick="logout()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/20 text-red-100 border border-red-500/30 rounded-xl hover:bg-red-600 hover:text-white transition text-xs font-semibold">
+        <i class="fa-solid fa-power-off"></i>
+        <span>Déconnexion</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- 💻 ZONE DE CONTENU PRINCIPALE -->
+  <main class="flex-1 p-8 overflow-y-auto">
+    <header class="mb-8 flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Gestion des Statuts & Activités</h1>
+        <p class="text-slate-500 text-sm mt-0.5">Modifiez l'état d'un compte utilisateur ou modérez ses opérations bancaires individuelles.</p>
+      </div>
+      <button onclick="loadUsersList()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition shadow-sm flex items-center gap-2">
+        <i class="fa-solid fa-arrows-rotate"></i>
+        <span>Rafraîchir les données</span>
+      </button>
+    </header>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      
+      <!-- 👥 SELECTION DU CLIENT -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-users text-[#056846]"></i>
+          <span>Sélectionner un Client</span>
+        </h2>
+
+        <div class="overflow-hidden border border-slate-100 rounded-xl">
+          <div class="max-h-[600px] overflow-y-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead class="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium">
+                <tr>
+                  <th class="p-3">Client</th>
+                  <th class="p-3">Statut</th>
+                  <th class="p-3 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="userTable" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="3" class="p-4 text-center text-slate-400 text-xs">Chargement des comptes...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⚙️ PANNEAU DE PILOTAGE DU CLIENT -->
+      <div class="xl:col-span-2 space-y-8">
+        
+        <!-- BLOC 1: STATUT DU COMPTE GLOBAL -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 opacity-40 pointer-events-none transition-all duration-300" id="accountStatusPanel">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-user-shield text-[#056846]"></i>
+              <span>Statut du Compte Dashboard</span>
+            </h2>
+            <span id="selectedUserLabel" class="text-xs font-mono font-semibold px-3 py-1 bg-slate-100 text-slate-600 rounded-lg">Aucun client sélectionné</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 transition">
+              <input type="radio" name="accountStatus" value="active" class="text-[#056846] focus:ring-[#056846]">
+              <div>
+                <div class="text-xs font-bold text-emerald-700">Actif / Normal</div>
+                <div class="text-[10px] text-slate-400">Accès complet à la plateforme</div>
+              </div>
+            </label>
+
+            <label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 transition">
+              <input type="radio" name="accountStatus" value="pending" class="text-[#056846] focus:ring-[#056846]">
+              <div>
+                <div class="text-xs font-bold text-amber-700">En Vérification</div>
+                <div class="text-[10px] text-slate-400">Accès restreint / KYC requis</div>
+              </div>
+            </label>
+
+            <label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 transition">
+              <input type="radio" name="accountStatus" value="blocked" class="text-[#056846] focus:ring-[#056846]">
+              <div>
+                <div class="text-xs font-bold text-red-700">Bloqué / Suspendu</div>
+                <div class="text-[10px] text-slate-400">Connexion ou opérations gelées</div>
+              </div>
+            </label>
+          </div>
+
+          <button onclick="updateAccountStatus()" class="mt-4 px-5 py-2.5 bg-[#056846] hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Mettre à jour le Statut du Compte</span>
+          </button>
+        </div>
+
+        <!-- BLOC 2: STATUTS DES OPÉRATIONS / TRANSACTIONS -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 opacity-40 pointer-events-none transition-all duration-300" id="txStatusPanel">
+          <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-[#056846]"></i>
+            <span>Modérer les Statuts d'Opérations</span>
+          </h2>
+
+          <div class="overflow-hidden border border-slate-100 rounded-xl">
+            <div class="max-h-[350px] overflow-y-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-50 sticky top-0 border-b border-slate-100 text-slate-500 font-medium">
+                  <tr>
+                    <th class="p-3">Date & Libellé</th>
+                    <th class="p-3 text-right">Montant</th>
+                    <th class="p-3">Statut Opération</th>
+                    <th class="p-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="txTable" class="divide-y divide-slate-100">
+                  <tr>
+                    <td colspan="4" class="p-4 text-center text-slate-400 italic">Veuillez d'abord sélectionner un client.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- SCRIPTS & LOGIQUE FIREBASE -->
+<script src="shared.js"></script>
+<script>
+  let selectedUserId = null;
+  let currentUsersData = {};
+
+  $(function() {
+    if (typeof toastr !== 'undefined') {
+      toastr.options = { positionClass: 'toast-top-right', timeOut: 3000 };
+    }
+    loadUsersList();
+  });
+
+  // Charger les clients depuis la collection users
+  function loadUsersList() {
+    db.collection('users').get().then((snapshot) => {
+      const tbody = $('#userTable');
+      tbody.empty();
+      currentUsersData = {};
+
+      if (snapshot.empty) {
+        tbody.html('<tr><td colspan="3" class="p-4 text-center text-slate-400 text-xs">Aucun client trouvé.</td></tr>');
+        return;
+      }
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const id = doc.id;
+        currentUsersData[id] = data;
+
+        const name = data.name || `${data.prenom || ''} ${data.nom || id}`;
+        const accountStatus = data.accountStatus || data.status || 'active';
+
+        let badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        let badgeText = 'Actif';
+        if (accountStatus === 'blocked' || accountStatus === 'Bloqué') {
+          badgeClass = 'bg-red-50 text-red-700 border-red-200';
+          badgeText = 'Bloqué';
+        } else if (accountStatus === 'pending' || accountStatus === 'Vérification') {
+          badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+          badgeText = 'En attente';
+        }
+
+        tbody.append(`
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3">
+              <div class="font-semibold text-slate-800 text-xs uppercase">${name}</div>
+              <div class="text-[10px] text-slate-400 font-mono">${id}</div>
+            </td>
+            <td class="p-3">
+              <span class="text-[10px] px-2 py-0.5 rounded-full border font-semibold ${badgeClass}">
+                ${badgeText}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <button onclick="selectUser('${id}')" class="px-2.5 py-1 bg-emerald-50 text-[#056846] font-semibold text-xs rounded-lg hover:bg-[#056846] hover:text-white transition">
+                Gérer
+              </button>
+            </td>
+          </tr>
+        `);
+      });
+    }).catch(err => {
+      console.error("Erreur Firestore:", err);
+      if (typeof toastr !== 'undefined') toastr.error("Erreur lors de la récupération des comptes");
+    });
+  }
+
+  // Sélectionner un utilisateur
+  function selectUser(id) {
+    selectedUserId = id;
+    const u = currentUsersData[id];
+    if (!u) return;
+
+    const displayName = u.name || `${u.prenom || ''} ${u.nom || id}`;
+    $('#selectedUserLabel').text(`${displayName} (${id})`);
+
+    // Sélectionner le bon radio bouton pour le statut
+    const currentAccStatus = u.accountStatus || u.status || 'active';
+    let mappedVal = 'active';
+    if(currentAccStatus === 'blocked' || currentAccStatus === 'Bloqué') mappedVal = 'blocked';
+    if(currentAccStatus === 'pending' || currentAccStatus === 'Vérification') mappedVal = 'pending';
+
+    $(`input[name="accountStatus"][value="${mappedVal}"]`).prop('checked', true);
+
+    // Débloquer l'interface de droite
+    $('#accountStatusPanel, #txStatusPanel').removeClass('opacity-40 pointer-events-none');
+
+    // Générer la table des transactions/historique
+    renderTransactionsTable(u.transactions || u.history || []);
+  }
+
+  // Mettre à jour le statut global du compte
+  function updateAccountStatus() {
+    if (!selectedUserId) return;
+    const newStatus = $('input[name="accountStatus"]:checked').val();
+
+    db.collection('users').doc(selectedUserId).update({
+      accountStatus: newStatus,
+      status: newStatus === 'active' ? 'Actif' : (newStatus === 'blocked' ? 'Bloqué' : 'Vérification')
+    }).then(() => {
+      if (typeof toastr !== 'undefined') toastr.success("Statut du compte mis à jour avec succès !");
+      currentUsersData[selectedUserId].accountStatus = newStatus;
+      loadUsersList();
+    }).catch(err => {
+      console.error(err);
+      if (typeof toastr !== 'undefined') toastr.error("Échec de la mise à jour");
+    });
+  }
+
+  // Rendu de la table des opérations
+  function renderTransactionsTable(transactions) {
+    const tbody = $('#txTable');
+    tbody.empty();
+
+    if (!transactions || transactions.length === 0) {
+      tbody.html('<tr><td colspan="4" class="p-4 text-center text-slate-400 text-xs">Aucune opération enregistrée pour ce client.</td></tr>');
+      return;
+    }
+
+    transactions.forEach((tx, index) => {
+      const amt = Number(tx.montant || tx.amount || 0);
+      const isCredit = amt > 0;
+      const formatted = Math.abs(amt).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+      const currentTxStatus = tx.status || 'completed';
+
+      tbody.append(`
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-3">
+            <div class="font-semibold text-slate-800">${tx.label || tx.libelle || 'Opération'}</div>
+            <div class="text-[10px] text-slate-400">${tx.date || ''} ${tx.type ? '• ' + tx.type : ''}</div>
+          </td>
+          <td class="p-3 text-right font-mono font-bold ${isCredit ? 'text-emerald-600' : 'text-slate-800'}">
+            ${isCredit ? '+' : '-'} ${formatted} €
+          </td>
+          <td class="p-3">
+            <select id="txStatusSelect_${index}" class="bg-slate-50 border border-slate-200 rounded-lg p-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#056846]">
+              <option value="completed" ${currentTxStatus === 'completed' ? 'selected' : ''}>Exécutée (Validée)</option>
+              <option value="pending" ${currentTxStatus === 'pending' ? 'selected' : ''}>En attente / En cours</option>
+              <option value="cancelled" ${currentTxStatus === 'cancelled' ? 'selected' : ''}>Annulée / Rejetée</option>
+            </select>
+          </td>
+          <td class="p-3 text-center">
+            <button onclick="updateTransactionStatus(${index})" class="px-2 py-1 bg-slate-800 text-white font-semibold text-[11px] rounded-lg hover:bg-slate-900 transition">
+              Valider
+            </button>
+          </td>
+        </tr>
+      `);
+    });
+  }
+
+  // Mettre à jour le statut d'une transaction spécifique
+  function updateTransactionStatus(txIndex) {
+    if (!selectedUserId) return;
+    const u = currentUsersData[selectedUserId];
+    const txArray = u.transactions || u.history;
+    if (!u || !txArray) return;
+
+    const newTxStatus = $(`#txStatusSelect_${txIndex}`).val();
+    txArray[txIndex].status = newTxStatus;
+
+    const updateData = u.transactions ? { transactions: txArray } : { history: txArray };
+
+    db.collection('users').doc(selectedUserId).update(updateData).then(() => {
+      if (typeof toastr !== 'undefined') toastr.success("Statut de l'opération mis à jour !");
+    }).catch(err => {
+      console.error(err);
+      if (typeof toastr !== 'undefined') toastr.error("Erreur lors de la sauvegarde");
+    });
+  }
+
+  function logout() {
+    sessionStorage.clear();
+    window.location.href = "login.html";
+  }
+</script>
+</body>
+</html>
